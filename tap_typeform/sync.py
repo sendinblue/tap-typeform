@@ -74,14 +74,14 @@ def sync(client, config, state, catalog):
             write_schemas(stream, catalog, selected_streams)
 
             stream_obj.sync_obj(client, state, catalog['streams'], config["start_date"],
-                                selected_streams, records_count)
+                                selected_streams, records_count, config["schemaless"])
         elif not stream_obj.parent:
             write_schemas(stream, catalog, selected_streams)
 
             for form in _forms_to_list(config):
 
                 stream_obj.sync_obj(client, state, catalog['streams'], form, config["start_date"],
-                                    selected_streams, records_count)
+                                    selected_streams, records_count, config["schemaless"])
 
     for stream_name, stream_count in records_count.items():
         LOGGER.info('%s: %d', stream_name, stream_count)

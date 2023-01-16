@@ -90,7 +90,7 @@ class TestIncrementalStream(unittest.TestCase):
             {"items": records,"page_count": 1},
         ]
 
-        test_stream.sync_obj(client, {}, catalogs, "form1", "", ['questions'], {"submitted_landings": 0})
+        test_stream.sync_obj(client, {}, catalogs, "form1", "", ['questions'], {"submitted_landings": 0}, False)
 
         # Verify that write_records was called for both the page
         self.assertEqual(mock_write_records.call_count,2)
@@ -139,7 +139,7 @@ class TestIncrementalStream(unittest.TestCase):
 
         record = {"landing_id": 1, "submitted_at": "", "answers": child_records}
 
-        test_stream.sync_child_stream(record, catalogs, {}, selected_streams, "form1", "", "")
+        test_stream.sync_child_stream(record, catalogs, {}, selected_streams, "form1", "", "", False)
 
         # Verify write records is called if the stream is selected
         self.assertEqual(mock_write_records.call_count, call_count)
@@ -158,7 +158,7 @@ class TestIncrementalStream(unittest.TestCase):
 
         record = {"landing_id": 1, "submitted_at": "", "answers": None}
 
-        test_stream.sync_child_stream(record, catalogs, {}, selected_streams, "form1", "", "")
+        test_stream.sync_child_stream(record, catalogs, {}, selected_streams, "form1", "", "", False)
 
         # Verify write records is NOT called if the child key value is null
         self.assertEqual(mock_write_records.call_count, 0)
@@ -182,7 +182,7 @@ class TestFormsStream(unittest.TestCase):
         client = Client({"token": ""})
         test_stream = Forms()
         
-        test_stream.sync_obj(client, {}, catalogs, "", ['forms'], {'forms': 0})
+        test_stream.sync_obj(client, {}, catalogs, "", ['forms'], {'forms': 0}, False)
 
         # Verify that write records called 3 time
         self.assertEqual(mock_write_records.call_count, 3)
