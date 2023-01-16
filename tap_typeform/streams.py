@@ -171,7 +171,7 @@ class FullTableStream(Stream):
     replication_method = 'FULL_TABLE'
 
     def sync_obj(self, client, state, catalogs, form_id,
-                    start_date, selected_stream_ids, records_count):
+                    start_date, selected_stream_ids, records_count, schemaless):
         LOGGER.info('Syncing  stream {} - form: {}'.format(
                     self.tap_stream_id, form_id))
         self.records_count = records_count
