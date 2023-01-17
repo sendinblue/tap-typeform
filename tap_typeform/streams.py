@@ -5,7 +5,6 @@ from datetime import datetime
 import singer
 from singer import bookmarks
 
-
 LOGGER = singer.get_logger()
 
 
@@ -23,13 +22,15 @@ def write_records(catalog_entry, tap_stream_id, records, schemaless):
                     singer.write_record(tap_stream_id, rec, time_extracted=extraction_time)
         counter.increment(len(records))
 
+
 def get_bookmark(state, stream_name, form_id, bookmark_key, start_date):
     """
     Return bookmark value if available in the state otherwise return start date
     """
     if form_id:
         return bookmarks.get_bookmark(state, stream_name, form_id, {}).get(bookmark_key, start_date)
-    return bookmarks.get_bookmark(state, stream_name, bookmark_key,start_date)
+    return bookmarks.get_bookmark(state, stream_name, bookmark_key, start_date)
+
 
 def get_min_bookmark(stream, selected_streams, bookmark, start_date, state, form_id, bookmark_key):
     """
@@ -42,29 +43,34 @@ def get_min_bookmark(stream, selected_streams, bookmark, start_date, state, form
         min_bookmark = min(min_bookmark, get_bookmark(state, stream, form_id, bookmark_key, start_date))
 
     for child in filter(lambda x: x in selected_streams, stream_obj.children):
-        min_bookmark = min(min_bookmark, get_min_bookmark(child, selected_streams, bookmark, start_date, state, form_id, bookmark_key))
+        min_bookmark = min(min_bookmark, get_min_bookmark(child, selected_streams, bookmark, start_date, state, form_id,
+                                                          bookmark_key))
 
     return min_bookmark
+
 
 def get_schema(catalog, stream_id):
     """
     Return catalog of the specified stream.
     """
-    stream_catalog = [cat for cat in catalog if cat['tap_stream_id'] == stream_id ][0]
+    stream_catalog = [cat for cat in catalog if cat['tap_stream_id'] == stream_id][0]
     return stream_catalog
+
 
 def write_bookmarks(stream, selected_streams, form_id, bookmark_value, state):
     stream_obj = STREAMS[stream]()
     # If the stream is selected, write the bookmark.
     if stream in selected_streams:
         if form_id:
-            singer.write_bookmark(state, stream_obj.tap_stream_id, form_id, {stream_obj.replication_keys[0]: bookmark_value})
+            singer.write_bookmark(state, stream_obj.tap_stream_id, form_id,
+                                  {stream_obj.replication_keys[0]: bookmark_value})
         else:
             singer.write_bookmark(state, stream_obj.tap_stream_id, stream_obj.replication_keys[0], bookmark_value)
 
     # For each child, write the bookmark if it is selected.
     for child in stream_obj.children:
         write_bookmarks(child, selected_streams, form_id, bookmark_value, state)
+
 
 class Stream:
     """
@@ -87,13 +93,15 @@ class Stream:
     def add_fields_at_1st_level(self, record, additional_data={}):
         pass
 
-    def sync_child_stream(self, record, catalogs, state, selected_stream_ids, form_id, start_date, max_bookmark, schemaless):
+    def sync_child_stream(self, record, catalogs, state, selected_stream_ids, form_id, start_date, max_bookmark,
+                          schemaless):
 
         for child in self.children:
             child_obj = STREAMS[child]()
             child_bookmark = get_bookmark(state, child_obj.tap_stream_id, form_id, self.replication_keys[0], start_date)
 
-            if child in selected_stream_ids and record[child_obj.replication_keys[0]] >= child_bookmark and record[self.child_data_key]:
+            if child in selected_stream_ids and record[child_obj.replication_keys[0]] >= child_bookmark and record[
+                self.child_data_key]:
                 child_catalog = get_schema(catalogs, child)
                 for rec in record[self.child_data_key]:
                     child_obj.add_fields_at_1st_level(rec, {**record, "_sdc_form_id": form_id})
@@ -102,8 +110,8 @@ class Stream:
                 max_bookmark = max(max_bookmark, record[child_obj.replication_keys[0]])
         return max_bookmark
 
-class IncrementalStream(Stream):
 
+class IncrementalStream(Stream):
     replication_method = 'INCREMENTAL'
 
     def write_records(self, records, catalogs, selected_stream_ids,
@@ -111,7 +119,7 @@ class IncrementalStream(Stream):
         stream_catalog = get_schema(catalogs, self.tap_stream_id)
         bookmark = get_bookmark(state, self.tap_stream_id, form_id, self.replication_keys[0], start_date)
 
-        with singer.metrics.record_counter(self.tap_stream_id) as counter: 
+        with singer.metrics.record_counter(self.tap_stream_id) as counter:
             with singer.Transformer() as transformer:
                 extraction_time = singer.utils.now()
                 stream_metadata = singer.metadata.to_map(stream_catalog['metadata'])
@@ -130,12 +138,13 @@ class IncrementalStream(Stream):
 
                     # Write selected child records
                     if self.children and self.child_data_key in record:
-                        max_bookmark = self.sync_child_stream(record, catalogs, state, selected_stream_ids,form_id, start_date, max_bookmark, schemaless)
+                        max_bookmark = self.sync_child_stream(record, catalogs, state, selected_stream_ids, form_id,
+                                                              start_date, max_bookmark, schemaless)
 
         return max_bookmark
 
     def sync_obj(self, client, state, catalogs, form_id,
-                    start_date, selected_stream_ids, records_count, schemaless):
+                 start_date, selected_stream_ids, records_count, schemaless):
         self.records_count = records_count
         full_url = client.build_url(self.endpoint).format(form_id)
         current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -143,9 +152,9 @@ class IncrementalStream(Stream):
 
         # Get minimum bookmark of child and parent streams.
         min_bookmark_value = get_min_bookmark(self.tap_stream_id, selected_stream_ids,
-                                                current_time, start_date, state, form_id, self.replication_keys[0])
+                                              current_time, start_date, state, form_id, self.replication_keys[0])
         LOGGER.info('Syncing  stream {} - form: {} start_date: {}'.format(
-                    self.tap_stream_id, form_id, pendulum.parse(min_bookmark_value).strftime("%Y-%m-%d %H:%M")))
+            self.tap_stream_id, form_id, pendulum.parse(min_bookmark_value).strftime("%Y-%m-%d %H:%M")))
         max_bookmark = bookmark
         page_count = 2
         params = {**self.params, "page_size": client.page_size}
@@ -165,30 +174,32 @@ class IncrementalStream(Stream):
         write_bookmarks(self.tap_stream_id, selected_stream_ids, form_id, max_bookmark, state)
         singer.write_state(state)
 
+
 class FullTableStream(Stream):
     endpoint = 'forms/{}'
 
     replication_method = 'FULL_TABLE'
 
     def sync_obj(self, client, state, catalogs, form_id,
-                    start_date, selected_stream_ids, records_count, schemaless):
+                 start_date, selected_stream_ids, records_count, schemaless):
         LOGGER.info('Syncing  stream {} - form: {}'.format(
-                    self.tap_stream_id, form_id))
+            self.tap_stream_id, form_id))
         self.records_count = records_count
         full_url = client.build_url(self.endpoint).format(form_id)
         stream_catalog = get_schema(catalogs, self.tap_stream_id)
         response = client.request(full_url, params=self.params)
 
         for record in response[self.data_key]:
-            self.add_fields_at_1st_level(record,{"form_id": form_id})
+            self.add_fields_at_1st_level(record, {"form_id": form_id})
 
         write_records(stream_catalog, self.tap_stream_id, response[self.data_key], schemaless)
         self.records_count[self.tap_stream_id] += len(response[self.data_key])
 
+
 class Forms(IncrementalStream):
     tap_stream_id = 'forms'
     key_properties = ['id']
-    endpoint='forms'
+    endpoint = 'forms'
     replication_method = 'INCREMENTAL'
     replication_keys = ['last_updated_at']
     data_key = 'items'
@@ -211,18 +222,18 @@ class Forms(IncrementalStream):
             yield response.get(self.data_key)
 
     def sync_obj(self, client, state, catalogs,
-                    start_date, selected_stream_ids, records_count, schemaless):
+                 start_date, selected_stream_ids, records_count, schemaless):
         self.records_count = records_count
-        bookmark = state.get('bookmarks',{}).get(self.tap_stream_id,{}).get(self.replication_keys[0], start_date)
+        bookmark = state.get('bookmarks', {}).get(self.tap_stream_id, {}).get(self.replication_keys[0], start_date)
         max_bookmark = bookmark
 
         for records in self.get_forms(client):
-            
             max_bookmark = self.write_records(records, catalogs, selected_stream_ids,
-                        None, max_bookmark, state, start_date, schemaless)
+                                              None, max_bookmark, state, start_date, schemaless)
             write_bookmarks(self.tap_stream_id, selected_stream_ids, None, max_bookmark, state)
 
         singer.write_state(state)
+
 
 class Questions(FullTableStream):
     tap_stream_id = 'questions'
@@ -231,11 +242,11 @@ class Questions(FullTableStream):
     data_key = 'fields'
 
     def fetch_sub_questions(self, row):
-        '''This function fetches records for each sub_question in a question group and returns a list of fetched sub_questions'''
-        sub_questions = [] #Creating blank list to accommodate each sub-question's records
+        """This function fetches records for each sub_question in a question group and returns a list of fetched sub_questions"""
+        sub_questions = []  # Creating blank list to accommodate each sub-question's records
 
-        #Appending each sub-question to the list
-        for question in row['properties'].get('fields',[]):
+        # Appending each sub-question to the list
+        for question in row['properties'].get('fields', []):
             sub_questions.append({
                 "question_id": question['id'],
                 "title": question['title'],
@@ -248,17 +259,18 @@ class Questions(FullTableStream):
         """
         Add additional data and nested fields to top level
         """
-        sub_questions ={} #Creating a blank dictionary to store records of sub_questions,if any
+        sub_questions = {}  # Creating a blank dictionary to store records of sub_questions,if any
 
-        #If type of question is group, i.e. it has sub_questions, then fetch those sub_questions
+        # If type of question is group, i.e. it has sub_questions, then fetch those sub_questions
         if record.get('type') == 'group':
             sub_questions['sub_questions'] = self.fetch_sub_questions(record)
 
-        #If sub_questions are fetched then add those in this field and display the same, else don't display this field
+        # If sub_questions are fetched then add those in this field and display the same, else don't display this field
         record.update({
-            "form_id": additional_data['form_id'],
-            "question_id": record['id']
-            }|sub_questions)
+                          "form_id": additional_data['form_id'],
+                          "question_id": record['id']
+                      } | sub_questions)
+
 
 class SubmittedLandings(IncrementalStream):
     tap_stream_id = 'submitted_landings'
@@ -267,10 +279,10 @@ class SubmittedLandings(IncrementalStream):
     endpoint = 'forms/{}/responses'
     children = ['answers']
     params = {
-                'since': '',
-                'page_size': '',
-                'completed': True
-            }
+        'since': '',
+        'page_size': '',
+        'completed': True
+    }
     data_key = 'items'
     child_data_key = 'answers'
 
@@ -279,14 +291,15 @@ class SubmittedLandings(IncrementalStream):
         Add additional data and nested fields to top level
         """
         record.update({
-                "_sdc_form_id": additional_data["_sdc_form_id"],
-                "user_agent": record["metadata"]["user_agent"],
-                "platform": record["metadata"]["platform"],
-                "referer": record["metadata"]["referer"],
-                "network_id": record["metadata"]["network_id"],
-                "browser": record["metadata"]["browser"],
-                "hidden": json.dumps(record["hidden"]) if "hidden" in record else ""
+            "_sdc_form_id": additional_data["_sdc_form_id"],
+            "user_agent": record["metadata"]["user_agent"],
+            "platform": record["metadata"]["platform"],
+            "referer": record["metadata"]["referer"],
+            "network_id": record["metadata"]["network_id"],
+            "browser": record["metadata"]["browser"],
+            "hidden": json.dumps(record["hidden"]) if "hidden" in record else ""
         })
+
 
 class UnsubmittedLandings(IncrementalStream):
     tap_stream_id = 'unsubmitted_landings'
@@ -294,10 +307,10 @@ class UnsubmittedLandings(IncrementalStream):
     key_properties = ['landing_id']
     endpoint = 'forms/{}/responses'
     params = {
-                'since': '',
-                'page_size': '',
-                'completed': False
-            }
+        'since': '',
+        'page_size': '',
+        'completed': False
+    }
     data_key = 'items'
 
     def add_fields_at_1st_level(self, record, additional_data={}):
@@ -305,12 +318,12 @@ class UnsubmittedLandings(IncrementalStream):
         Add additional data and nested fields to top level
         """
         record.update({
-                "_sdc_form_id": additional_data["_sdc_form_id"],
-                "user_agent": record["metadata"]["user_agent"],
-                "platform": record["metadata"]["platform"],
-                "referer": record["metadata"]["referer"],
-                "network_id": record["metadata"]["network_id"],
-                "browser": record["metadata"]["browser"],
+            "_sdc_form_id": additional_data["_sdc_form_id"],
+            "user_agent": record["metadata"]["user_agent"],
+            "platform": record["metadata"]["platform"],
+            "referer": record["metadata"]["referer"],
+            "network_id": record["metadata"]["network_id"],
+            "browser": record["metadata"]["browser"],
         })
 
 
@@ -321,7 +334,7 @@ class Answers(IncrementalStream):
     parent = 'submitted_landings'
     data_key = 'answers'
 
-    def add_fields_at_1st_level(self, record, additional_data = {}):
+    def add_fields_at_1st_level(self, record, additional_data={}):
         """
         Add additional data and nested fields to top level
         """
@@ -338,13 +351,14 @@ class Answers(IncrementalStream):
         record.update({
             "_sdc_form_id": additional_data['_sdc_form_id'],
             "landing_id": additional_data.get('landing_id'),
-            "question_id": record.get('field',{}).get('id'),
-            "type": record.get('field',{}).get('type'),
-            "ref": record.get('field',{}).get('ref'),
+            "question_id": record.get('field', {}).get('id'),
+            "type": record.get('field', {}).get('type'),
+            "ref": record.get('field', {}).get('ref'),
             "data_type": data_type,
             "submitted_at": additional_data.get('submitted_at'),
             "answer": answer_value
         })
+
 
 STREAMS = {
     "forms": Forms,
