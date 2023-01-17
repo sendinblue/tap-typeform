@@ -267,10 +267,10 @@ class Questions(FullTableStream):
             sub_questions['sub_questions'] = self.fetch_sub_questions(record)
 
         # If sub_questions are fetched then add those in this field and display the same, else don't display this field
-        record.update({
+        record.update({**{
                           "form_id": additional_data['form_id'],
                           "question_id": record['id']
-                      } | sub_questions)
+                      }, **sub_questions})
 
 
 class SubmittedLandings(IncrementalStream):
